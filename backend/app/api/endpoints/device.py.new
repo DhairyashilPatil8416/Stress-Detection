@@ -1,0 +1,148 @@
+from fastapi import APIRouter, Depends, HTTPException, status, Header, Request, Body
+from typing import List, Any, Dict
+from app.schemas.schemas import Command, CommandUpdate
+from app.models.models import get_pending_commands, update_command
+from app.core.security.deps import verify_device_api_key, limiter
+import logging
+from datetime import datetime
+import uuid
+import hashlib
+import os
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter()
+
+@router.get("/commands", response_model=List[Command])
+@limiter.limit("30/minute")
+async def get_device_commands(
+    request: Request,
+    x_device_key: str = Header(..., description="Device API Key")
+) -> Any:
+    """
+    Get pending commands for a device
+    """
+    try:
+        # Verify API key and get device_id
+        device_id, _ = await verify_device_api_key(x_device_key, request)
+        
+        # Get pending commands for the device
+        commands = get_pending_commands(device_id)
+        
+        # Clean MongoDB _id from results
+        for cmd in commands:
+            if "_id" in cmd:
+                cmd.pop("_id")
+        
+        return commands
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error retrieving device commands: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An error occurred retrieving commands"
+        )
+
+@router.post("/commands/ack/{command_id}", response_model=Command)
+async def acknowledge_command(
+    command_id: str,
+    update_data: CommandUpdate,
+    request: Request,
+    x_device_key: str = Header(..., description="Device API Key")
+) -> Any:
+    """
+    Acknowledge or complete a command
+    """
+    try:
+        # Verify API key (no need to use the returned device_id)
+        await verify_device_api_key(x_device_key, request)
+        
+        # Update command status
+        update_command(command_id, update_data)
+        
+        # Get updated command
+        from app.db.mongodb import commands_collection
+        command = commands_collection.find_one({"command_id": command_id})
+        
+        if not command:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Command not found"
+            )
+        
+        # Clean MongoDB _id
+        if "_id" in command:
+            command.pop("_id")
+        
+        return command
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating command: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An error occurred updating command"
+        )
+
+@router.post("/register", status_code=status.HTTP_201_CREATED)
+async def register_device(
+    request: Request,
+    data: Dict[str, Any] = Body(...)
+) -> Any:
+    """
+    Register a new device
+    """
+    try:
+        employee_id = data.get("employee_id")
+        device_name = data.get("device_name")
+        device_type = data.get("device_type", "windows_agent")
+        
+        if not employee_id or not device_name:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Missing required fields"
+            )
+        
+        # Generate a unique device ID
+        device_id = f"device-{uuid.uuid4().hex[:8]}"
+        
+        # Generate an API key
+        api_key_raw = f"{device_id}:{uuid.uuid4().hex}:{datetime.utcnow().isoformat()}"
+        api_key = hashlib.sha256(api_key_raw.encode()).hexdigest()
+        
+        # Save device in database
+        device_data = {
+            "device_id": device_id,
+            "employee_id": employee_id,
+            "device_name": device_name,
+            "device_type": device_type,
+            "api_key": api_key,
+            "registered_at": datetime.utcnow(),
+            "last_active": datetime.utcnow(),
+            "status": "active"
+        }
+        
+        # Save to the database
+        from app.db.mongodb import devices_collection
+        devices_collection.insert_one(device_data)
+        
+        logger.info(f"Device registered: {device_id} for employee {employee_id}")
+        
+        # Return the device ID and API key
+        return {
+            "device_id": device_id,
+            "api_key": api_key,
+            "message": "Device registered successfully"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error registering device: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An error occurred registering the device"
+        )

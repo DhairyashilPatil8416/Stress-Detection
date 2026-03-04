@@ -1,0 +1,308 @@
+{
+  "info": {
+    "_postman_id": "1e7a3b5c-4f2d-4a63-9c8e-2d6b9a5e7f3c",
+    "name": "Stress Detection API",
+    "description": "API collection for testing the Stress Detection API endpoints",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Register Device",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"employee_id\": \"EMP_001\",\n    \"device_name\": \"Test Device\",\n    \"device_type\": \"windows_agent\",\n    \"registration_date\": \"{{$isoTimestamp}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/device/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "device", "register"]
+            },
+            "description": "Register a new device and obtain an API key"
+          },
+          "response": []
+        },
+        {
+          "name": "Login (Admin/Manager)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "username",
+                  "value": "admin@example.com",
+                  "type": "text"
+                },
+                {
+                  "key": "password",
+                  "value": "adminpassword",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "login"]
+            },
+            "description": "Login to obtain JWT token for protected endpoints"
+          },
+          "response": []
+        }
+      ],
+      "description": "Authentication-related endpoints"
+    },
+    {
+      "name": "Device API",
+      "item": [
+        {
+          "name": "Get Device Commands",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Device-Key",
+                "value": "{{apiKey}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/device/{{deviceId}}/commands",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "device", "{{deviceId}}", "commands"]
+            },
+            "description": "Get pending commands for a device"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Device Commands (Query Param)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/device/{{deviceId}}/commands?api_key={{apiKey}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "device", "{{deviceId}}", "commands"],
+              "query": [
+                {
+                  "key": "api_key",
+                  "value": "{{apiKey}}"
+                }
+              ]
+            },
+            "description": "Get pending commands for a device using query parameter for API key"
+          },
+          "response": []
+        },
+        {
+          "name": "Acknowledge Command",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Device-Key",
+                "value": "{{apiKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"status\": \"completed\",\n    \"processed_at\": \"{{$isoTimestamp}}\",\n    \"response\": {}\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/device/commands/ack/{{commandId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "device", "commands", "ack", "{{commandId}}"]
+            },
+            "description": "Acknowledge a command as processed"
+          },
+          "response": []
+        }
+      ],
+      "description": "Device-related endpoints"
+    },
+    {
+      "name": "Stress Data",
+      "item": [
+        {
+          "name": "Submit Stress Reading",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Device-Key",
+                "value": "{{apiKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"device_id\": \"{{deviceId}}\",\n    \"employee_id\": \"{{employeeId}}\",\n    \"stress_level\": 0.65,\n    \"emotion\": \"stressed\",\n    \"confidence\": 0.82,\n    \"timestamp\": \"{{$isoTimestamp}}\",\n    \"metadata\": {\n        \"face_quality\": {\n            \"brightness\": 0.78,\n            \"clarity\": 0.85\n        },\n        \"face_coords\": [120, 80, 200, 160]\n    }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/stress/record",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "stress", "record"]
+            },
+            "description": "Submit a stress reading from a device"
+          },
+          "response": []
+        },
+        {
+          "name": "Submit Stress Reading (Query Param)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"device_id\": \"{{deviceId}}\",\n    \"employee_id\": \"{{employeeId}}\",\n    \"stress_level\": 0.65,\n    \"emotion\": \"stressed\",\n    \"confidence\": 0.82,\n    \"timestamp\": \"{{$isoTimestamp}}\",\n    \"metadata\": {\n        \"face_quality\": {\n            \"brightness\": 0.78,\n            \"clarity\": 0.85\n        },\n        \"face_coords\": [120, 80, 200, 160]\n    }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/stress/record?api_key={{apiKey}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "stress", "record"],
+              "query": [
+                {
+                  "key": "api_key",
+                  "value": "{{apiKey}}"
+                }
+              ]
+            },
+            "description": "Submit a stress reading from a device using query parameter for API key"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Employee Stress History",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/employee/stress/history/{{employeeId}}?days=7",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "employee", "stress", "history", "{{employeeId}}"],
+              "query": [
+                {
+                  "key": "days",
+                  "value": "7"
+                }
+              ]
+            },
+            "description": "Get stress history for an employee (requires JWT authentication)"
+          },
+          "response": []
+        }
+      ],
+      "description": "Stress data submission and retrieval endpoints"
+    },
+    {
+      "name": "Utilities",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/utils/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "utils", "health"]
+            },
+            "description": "Check if the API is running"
+          },
+          "response": []
+        }
+      ],
+      "description": "Utility endpoints"
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          ""
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          ""
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8000",
+      "type": "string"
+    },
+    {
+      "key": "apiKey",
+      "value": "your_api_key_here",
+      "type": "string"
+    },
+    {
+      "key": "deviceId",
+      "value": "your_device_id_here",
+      "type": "string"
+    },
+    {
+      "key": "employeeId",
+      "value": "EMP_001",
+      "type": "string"
+    },
+    {
+      "key": "jwtToken",
+      "value": "your_jwt_token_here",
+      "type": "string"
+    },
+    {
+      "key": "commandId",
+      "value": "your_command_id_here",
+      "type": "string"
+    }
+  ]
+}
