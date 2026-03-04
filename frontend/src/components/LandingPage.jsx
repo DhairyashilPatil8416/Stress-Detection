@@ -60,7 +60,7 @@ const LandingPage = () => {
   const features = [
     {
       icon: <FaBrain className="text-4xl text-blue-500" />,
-      title: "AI-Powered Detection",
+      title: "Dhairyashil Patil",
       description: "Advanced machine learning algorithms analyze facial expressions and physiological signals to detect stress levels in real-time."
     },
     {

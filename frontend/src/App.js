@@ -4,7 +4,7 @@ import LandingPage from './components/LandingPage';
 import './App.css';
 
 function App() {
-  return (
+  return (  
     <Router>
       <div className="App">
         <Routes>
