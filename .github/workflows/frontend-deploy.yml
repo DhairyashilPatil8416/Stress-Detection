@@ -117,21 +117,15 @@ jobs:
         run: |
           aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ env.EKS_CLUSTER_NAME }}
 
-      - name: Get Docker image tag
-        id: image
+      - name: Apply Kubernetes manifests
         run: |
-          IMAGE_TAG="${{ secrets.DOCKER_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}:${{ github.sha }}"
-          echo "tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
+          kubectl apply -f deployment.yaml -n ${{ env.K8S_NAMESPACE }}
 
       - name: Update deployment image
         run: |
           kubectl set image deployment/frontend-deployment \
-            frontend=${{ steps.image.outputs.tag }} \
+            frontend=${{ secrets.DOCKER_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}:latest \
             -n ${{ env.K8S_NAMESPACE }}
-
-      - name: Apply Kubernetes manifests
-        run: |
-          kubectl apply -f deployment.yaml -n ${{ env.K8S_NAMESPACE }}
 
       - name: Wait for rollout to complete
         run: |
@@ -145,4 +139,4 @@ jobs:
       - name: Deployment successful
         run: |
           echo "✅ Frontend deployment completed successfully!"
-          echo "Deployed image: ${{ steps.image.outputs.tag }}"
+          echo "Deployed image: ${{ secrets.DOCKER_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}:latest"
