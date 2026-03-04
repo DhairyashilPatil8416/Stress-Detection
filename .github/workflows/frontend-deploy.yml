@@ -1,0 +1,148 @@
+name: Frontend CI/CD
+
+on:
+  push:
+    paths:
+      - 'frontend/**'
+    branches:
+      - main
+
+env:
+  AWS_REGION: ap-south-1
+  EKS_CLUSTER_NAME: stress-detection-cluster
+  DOCKER_IMAGE_NAME: stress-detection
+  K8S_NAMESPACE: default
+
+jobs:
+  build:
+    name: Build Frontend
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ./frontend
+        run: npm ci --legacy-peer-deps
+
+      - name: Run tests
+        working-directory: ./frontend
+        run: npm test -- --passWithNoTests
+
+      - name: Build application
+        working-directory: ./frontend
+        run: npm run build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-build
+          path: frontend/build
+          retention-days: 1
+
+  push:
+    name: Push to Docker Registry
+    runs-on: ubuntu-latest
+    needs: build
+    outputs:
+      image_tag: ${{ steps.meta.outputs.tags }}
+      
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ secrets.DOCKER_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Image digest
+        run: echo "Image pushed with tags - ${{ steps.meta.outputs.tags }}"
+
+  deploy:
+    name: Deploy to AWS EKS
+    runs-on: ubuntu-latest
+    needs: push
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'latest'
+
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ env.EKS_CLUSTER_NAME }}
+
+      - name: Get Docker image tag
+        id: image
+        run: |
+          IMAGE_TAG="${{ secrets.DOCKER_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}:${{ github.sha }}"
+          echo "tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+      - name: Update deployment image
+        run: |
+          kubectl set image deployment/frontend-deployment \
+            frontend=${{ steps.image.outputs.tag }} \
+            -n ${{ env.K8S_NAMESPACE }}
+
+      - name: Apply Kubernetes manifests
+        run: |
+          kubectl apply -f deployment.yaml -n ${{ env.K8S_NAMESPACE }}
+
+      - name: Wait for rollout to complete
+        run: |
+          kubectl rollout status deployment/frontend-deployment -n ${{ env.K8S_NAMESPACE }} --timeout=5m
+
+      - name: Verify deployment
+        run: |
+          kubectl get pods -n ${{ env.K8S_NAMESPACE }} -l app=frontend
+          kubectl get service -n ${{ env.K8S_NAMESPACE }} frontend-service
+
+      - name: Deployment successful
+        run: |
+          echo "✅ Frontend deployment completed successfully!"
+          echo "Deployed image: ${{ steps.image.outputs.tag }}"
